@@ -1,0 +1,36 @@
+{
+  "name": "vite-ts-lib-starter",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "postbuild": "dts-bundle-generator --config ./dts-bundle-generator.config.ts",
+    "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
+    "lint:eslint": "eslint . --fix --cache",
+    "lint": "run-s lint:*",
+    "up": "taze minor -I"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^9.0.0",
+    "@tsconfig/node22": "^22.0.5",
+    "@types/node": "^25.9.1",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/tsconfig": "^0.9.1",
+    "dts-bundle-generator": "^9.5.1",
+    "eslint": "^10.4.0",
+    "eslint-plugin-oxlint": "^1.66.0",
+    "jiti": "^2.7.0",
+    "oxlint": "^1.66.0",
+    "rolldown": "^1.0.2",
+    "sass": "^1.100.0",
+    "taze": "^19.14.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14",
+    "vue": "^3.5.34"
+  }
+}
