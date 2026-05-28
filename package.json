@@ -5,6 +5,10 @@
   "description": "Leaflet TileLayer reprojection adapter for overlaying tile services across CRS.",
   "author": "ZvonimirSun",
   "license": "MIT",
+  "packageManager": "pnpm@11.1.3",
+  "repository": {
+    "url": "https://github.com/ZvonimirSun/leaflet-projectlayer"
+  },
   "keywords": [
     "leaflet",
     "crs",
