@@ -2,7 +2,9 @@ import antfu from '@antfu/eslint-config'
 import pluginOxlint from 'eslint-plugin-oxlint'
 
 export default antfu(
-  {},
+  {
+    ignores: ['pnpm-workspace.yaml'],
+  },
   {
     rules: {
       'unused-imports/no-unused-vars': [
