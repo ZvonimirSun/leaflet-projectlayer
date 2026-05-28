@@ -53,6 +53,7 @@ npm pack --dry-run
 - `package.json` 的 `version`、`exports/main/module/types/files` 正确
 - `README.md` 示例与当前 API 一致
 - `LICENSE` 与 `package.json.license` 一致
+- GitHub Actions 流水线（`.github/workflows/publish.yml`）在 PR 与 main push 场景可用
 
 ## 6. 风险注意项
 
