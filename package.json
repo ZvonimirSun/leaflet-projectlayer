@@ -1,36 +1,70 @@
 {
-  "name": "vite-ts-lib-starter",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@zvonimirsun/leaflet-projectlayer",
   "type": "module",
+  "version": "0.1.0",
+  "description": "Leaflet TileLayer reprojection adapter for overlaying tile services across CRS.",
+  "author": "ZvonimirSun",
+  "license": "MIT",
+  "keywords": [
+    "leaflet",
+    "crs",
+    "tile",
+    "reprojection"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/leaflet-projectlayer.d.ts",
+      "import": "./dist/leaflet-projectlayer.js",
+      "require": "./dist/leaflet-projectlayer.umd.cjs"
+    }
+  },
+  "main": "./dist/leaflet-projectlayer.umd.cjs",
+  "module": "./dist/leaflet-projectlayer.js",
+  "types": "./dist/leaflet-projectlayer.d.ts",
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "postbuild": "dts-bundle-generator --config ./dts-bundle-generator.config.ts",
+    "postbuild": "dts-bundle-generator --config ./dts-bundle-generator.config.cts",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
     "lint:eslint": "eslint . --fix --cache",
-    "lint": "run-s lint:*",
+    "lint": "run-s lint:oxlint lint:eslint",
     "up": "taze minor -I"
   },
+  "peerDependencies": {
+    "leaflet": "^1.9.4"
+  },
+  "dependencies": {},
   "devDependencies": {
     "@antfu/eslint-config": "^9.0.0",
     "@tsconfig/node22": "^22.0.5",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^25.9.1",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/tsconfig": "^0.9.1",
     "dts-bundle-generator": "^9.5.1",
     "eslint": "^10.4.0",
-    "eslint-plugin-oxlint": "^1.66.0",
+    "eslint-plugin-oxlint": "^1.67.0",
     "jiti": "^2.7.0",
-    "oxlint": "^1.66.0",
-    "rolldown": "^1.0.2",
+    "jsdom": "^29.1.1",
+    "leaflet": "^1.9.4",
+    "npm-run-all2": "^9.0.1",
+    "oxlint": "^1.67.0",
+    "rolldown": "^1.0.3",
     "sass": "^1.100.0",
     "taze": "^19.14.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.14",
-    "vue": "^3.5.34"
+    "vitest": "^4.1.7",
+    "vue": "^3.5.35"
   }
 }

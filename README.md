@@ -1,95 +1,102 @@
-# Vite TypeScript 库开发模板
+# Leaflet ProjectLayer
 
-[![code style](https://antfu.me/badge-code-style.svg)](https://github.com/antfu/eslint-config)
+基于 Leaflet `GridLayer` 的 TypeScript 库：将一个源 `TileLayer` 按源 CRS 重投影到当前地图 CRS 下显示。
 
-这是一个用于开发 TypeScript 库的 Vite 模板，支持使用 Vue 3 编写调试页面。
+## 安装
 
-## 模板组成
-
-### 核心技术栈
-
-- **构建工具**: [Vite](https://vitejs.dev/) (基于 Rolldown)
-- **开发语言**: [TypeScript](https://www.typescriptlang.org/) (^6.0.3)
-- **框架支持**: [Vue 3](https://vuejs.org/) (^3.5.34)
-- **运行环境**: Node.js (^20.19.0 或 >=22.12.0)
-- **包管理器**: [pnpm](https://pnpm.io/)
-
-### 开发工具
-
-- **代码质量**: [ESLint](https://eslint.org/) + [@antfu/eslint-config](https://github.com/antfu/eslint-config) + [Oxlint](https://oxc.rs/)
-- **类型声明生成**: [dts-bundle-generator](https://github.com/timocov/dts-bundle-generator)
-- **样式预处理**: [Sass](https://sass-lang.com/)
-
-### 输出格式
-
-该模板配置支持构建多种模块格式:
-- **ESM** (ES Modules) - `*.esm.js`
-- **CommonJS** - `*.cjs`
-- **IIFE** (立即执行函数) - `*.iife.js`
-
-### 项目结构
-
-```
-vite-ts-lib-starter/
-├── src/              # 库源代码目录
-│   └── index.ts      # 库入口文件
-├── test/             # 开发测试目录
-│   ├── App.vue       # 测试用 Vue 组件
-│   └── main.ts       # 测试入口
-├── public/           # 静态资源
-├── dist/             # 构建输出目录
-└── 配置文件
-    ├── vite.config.ts                    # Vite 配置
-    ├── tsconfig.json                     # TypeScript 配置
-    ├── eslint.config.ts                  # ESLint 配置
-    └── dts-bundle-generator.config.ts    # 类型声明生成配置
+```sh
+pnpm install @zvonimirsun/leaflet-projectlayer leaflet
 ```
 
-## 推荐的 IDE 设置
+> `leaflet` 为 peer dependency，需要由业务项目自行安装。
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (请禁用 Vetur)
+## 快速使用
 
-## 推荐的浏览器设置
+```ts
+import { projectLayer } from '@zvonimirsun/leaflet-projectlayer'
+import L from 'leaflet'
 
-- Chromium 内核浏览器 (Chrome、Edge、Brave 等):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd) 
-  - [在 Chrome DevTools 中开启自定义对象格式化](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [在 Firefox DevTools 中开启自定义对象格式化](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+const sourceLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png')
 
-## 自定义配置
+const overlay = projectLayer({
+  crs: L.CRS.EPSG3857,
+  layer: sourceLayer,
+  opacity: 0.6,
+})
 
-参考 [Vite 配置文档](https://vitejs.dev/config/)。
+overlay.addTo(map)
+```
 
-## 项目设置
+也可以直接使用构造类：
+
+```ts
+import { ProjectLayer } from '@zvonimirsun/leaflet-projectlayer'
+
+new ProjectLayer({
+  crs: L.CRS.EPSG3857,
+  layer: sourceLayer,
+}).addTo(map)
+```
+
+## API
+
+### `projectLayer(options)`
+
+工厂函数，返回 `L.GridLayer` 实例。
+
+### `new ProjectLayer(options)`
+
+构造类方式创建图层实例。
+
+### `options`
+
+在 Leaflet `GridLayerOptions` 基础上扩展以下字段：
+
+- `crs: L.CRS`（必填）
+  - 源瓦片图层使用的 CRS。
+- `layer: L.TileLayer`（必填）
+  - 作为数据来源的源瓦片图层。
+- `zoomRounding?: 'round' | 'ceil' | 'floor'`（可选，默认 `round`）
+  - 目标 zoom 反解源 zoom 后的取整策略。
+
+其余选项沿用 Leaflet `GridLayerOptions`。
+
+## 运行行为说明
+
+- 若未显式传入 `minZoom/maxZoom`，会按源 `TileLayer` 的 `minZoom/maxZoom` 结合源/目标 CRS 比例尺映射出默认范围。
+- `createTile(coords, done)` 每次渲染都会实时读取当前 `map.options.crs` 作为目标 CRS。
+
+## 错误与调试事件
+
+库会按 Leaflet 事件机制触发：
+
+- `tileerror`：瓦片渲染失败时触发，包含公共错误码与调试错误码。
+- `tilemetrics`：瓦片渲染过程指标（依赖数量、缓存命中、耗时等）。
+
+## 构建产物
+
+`pnpm build` 后默认输出：
+
+- ESM: `dist/leaflet-projectlayer.js`
+- UMD (require): `dist/leaflet-projectlayer.umd.cjs`
+- 类型声明: `dist/leaflet-projectlayer.d.ts`
+
+## 开发命令
 
 ```sh
 pnpm install
-```
-
-### 开发模式 (热重载)
-
-```sh
 pnpm dev
-```
-
-### 生产构建 (类型检查、编译和压缩)
-
-```sh
+pnpm test
+pnpm lint
 pnpm build
 ```
 
-构建过程包括:
-1. TypeScript 类型检查
-2. 使用 Vite 构建库文件 (生成 ESM、CJS、IIFE 格式)
-3. 自动生成类型声明文件 (`.d.ts`)
+## 限制与注意事项
 
-### 代码检查和修复
+- 本库聚焦二维瓦片重投影，不包含矢量要素重投影能力。
+- 依赖源瓦片服务可用性与 CRS 定义正确性。
+- 仓库内调试页仅用于本地验证，不属于对外 API 与发布内容。
 
-```sh
-pnpm lint
-```
+## 协作说明
 
-该命令会依次运行 Oxlint 和 ESLint 进行代码检查和自动修复。
-
+协作规则、发布检查与后续维护任务见 [AGENTS.md](AGENTS.md)。

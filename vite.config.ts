@@ -1,6 +1,3 @@
-import type { ModuleFormat } from 'rolldown'
-import type { LibraryFormats } from 'vite'
-
 import path from 'node:path'
 import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
@@ -11,24 +8,20 @@ function getPackageName() {
   return packageJson.name
 }
 
+function getPackageBaseName() {
+  const packageName = getPackageName()
+  const scopedMatch = packageName.match(/^@[^/]+\/(.+)$/)
+  return scopedMatch ? scopedMatch[1] : packageName
+}
+
 function getPackageNameCamelCase() {
   try {
-    return getPackageName().replace(/-./g, char => char[1].toUpperCase())
+    return getPackageBaseName().replace(/-./g, char => char[1].toUpperCase())
   }
-  catch (err) {
+  catch {
     throw new Error('Name property in package.json is missing.')
   }
 }
-
-const fileName: {
-  [key in ModuleFormat]?: string
-} = {
-  es: `${getPackageName()}.esm.js`,
-  cjs: `${getPackageName()}.cjs`,
-  iife: `${getPackageName()}.iife.js`,
-}
-
-const formats = Object.keys(fileName) as Array<LibraryFormats>
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -38,8 +31,6 @@ export default defineConfig({
     lib: {
       entry: path.resolve(__dirname, 'src/index.ts'),
       name: getPackageNameCamelCase(),
-      formats,
-      fileName: format => fileName[format] || '',
     },
   },
   plugins: [
