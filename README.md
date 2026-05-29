@@ -1,5 +1,7 @@
 # Leaflet ProjectLayer
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ZvonimirSun/leaflet-projectlayer)
+
 基于 Leaflet `GridLayer` 的 TypeScript 库：将一个源 `TileLayer` 按源 CRS 重投影到当前地图 CRS 下显示。
 
 ## 安装
