@@ -229,6 +229,46 @@ describe('projectLayer 公开行为', () => {
     getContextSpy.mockRestore()
   })
 
+  it('目标瓦片移除时会取消未完成渲染并触发源瓦片卸载事件', async () => {
+    const getContextSpy = mockCanvasContext()
+    const done = vi.fn()
+    const tileUnloadSpy = vi.fn()
+    let image!: HTMLImageElement
+    const sourceLayer = createTileLayerMock(() => {
+      image = document.createElement('img')
+      image.src = 'https://tiles.example/0/0/0.png'
+      return image
+    })
+    sourceLayer.on('tileunload', tileUnloadSpy)
+    const layer = new ProjectLayer({
+      crs: L.CRS.EPSG3857,
+      layer: sourceLayer,
+    }) as TestProjectLayer
+    bindLayerToMap(layer)
+
+    const tile = layer.createTile(tileCoords(0, 0, 0), done)
+
+    await vi.waitFor(() => {
+      expect(image).toBeInstanceOf(HTMLImageElement)
+    })
+
+    ;(layer as any)._tiles = {
+      '0:0:0': { el: tile },
+    }
+    ;(layer as any)._removeTile('0:0:0')
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(image.getAttribute('src')).toBe('https://tiles.example/0/0/0.png')
+    expect(tileUnloadSpy).toHaveBeenCalledTimes(1)
+    expect(tileUnloadSpy.mock.calls[0]?.[0]).toMatchObject({
+      coords: { x: 0, y: 0, z: 0 },
+      tile: image,
+    })
+    expect(done).not.toHaveBeenCalled()
+
+    getContextSpy.mockRestore()
+  })
+
   it('多次 createTile 命中相同源瓦片时会复用内部缓存', async () => {
     const getContextSpy = mockCanvasContext()
     const sourceLayer = createTileLayerMock()

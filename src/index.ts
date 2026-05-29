@@ -1,4 +1,4 @@
-import type { ResamplingInterpolation, SourceZoomRounding, TileCoord, TileErrorDebugEvent, TileRenderElement, TileRenderMetrics } from './types'
+import type { ResamplingInterpolation, SourceTileCacheEntry, SourceZoomRounding, TileCoord, TileErrorDebugEvent, TileRenderElement, TileRenderMetrics } from './types'
 import L from 'leaflet'
 import { normalizeProjectLayerError, ProjectLayerError } from './error'
 import { computeTileDependencies, geoBoundsToSourceProjectedBounds, sourceBoundsToSourceTiles, sourceZoomToTargetZoom, targetZoomToSourceZoom, tileCoordToGeoBounds } from './geometry'
@@ -88,8 +88,10 @@ interface ProjectLayerOptions extends L.GridLayerOptions {
 interface ProjectLayerInternalState {
   _sourceCRS: L.CRS
   _sourceLayer: L.TileLayer
-  _sourceTileFetcher: (coords: TileCoord) => Promise<TileRenderElement>
-  _sourceTileCache: Map<string, Promise<TileRenderElement>>
+  _sourceTileFetcher: (coords: TileCoord, signal?: AbortSignal) => Promise<TileRenderElement>
+  _sourceTileCache: Map<string, SourceTileCacheEntry>
+  _tileAbortControllers: WeakMap<TileRenderElement, AbortController>
+  _activeTileAbortControllers: Set<AbortController>
   _zoomRounding: SourceZoomRounding
   _requestedMaxZoom?: number
   _requestedMinZoom?: number
@@ -97,6 +99,27 @@ interface ProjectLayerInternalState {
 }
 
 type ProjectLayerInstance = L.GridLayer & ProjectLayerInternalState
+
+function abortTileRender(layer: ProjectLayerInstance, tile: unknown): void {
+  if (!(tile instanceof HTMLCanvasElement || tile instanceof HTMLImageElement)) {
+    return
+  }
+
+  const controller = layer._tileAbortControllers.get(tile)
+
+  if (!controller) {
+    return
+  }
+
+  controller.abort()
+  layer._tileAbortControllers.delete(tile)
+  layer._activeTileAbortControllers.delete(controller)
+}
+
+function releaseTileRenderController(layer: ProjectLayerInstance, tile: TileRenderElement, controller: AbortController): void {
+  layer._tileAbortControllers.delete(tile)
+  layer._activeTileAbortControllers.delete(controller)
+}
 
 export const ProjectLayer = L.GridLayer.extend({
   initialize(this: ProjectLayerInstance, options: ProjectLayerOptions): void {
@@ -106,6 +129,8 @@ export const ProjectLayer = L.GridLayer.extend({
     this._sourceLayer = options.layer
     this._sourceTileFetcher = createSourceTileFetcher(this._sourceLayer, this._sourceCRS)
     this._sourceTileCache = new Map()
+    this._tileAbortControllers = new WeakMap()
+    this._activeTileAbortControllers = new Set()
     this._zoomRounding = options.zoomRounding ?? 'round'
     this._requestedMinZoom = options.minZoom
     this._requestedMaxZoom = options.maxZoom
@@ -115,6 +140,15 @@ export const ProjectLayer = L.GridLayer.extend({
     if (options.bounds === undefined && sourceLayerOptions.bounds !== undefined) {
       ;(this.options as L.GridLayerOptions).bounds = sourceLayerOptions.bounds
     }
+  },
+
+  onRemove(this: ProjectLayerInstance, map: L.Map): void {
+    for (const controller of this._activeTileAbortControllers) {
+      controller.abort()
+    }
+
+    this._activeTileAbortControllers.clear()
+    ;(L.GridLayer.prototype as any).onRemove.call(this, map)
   },
 
   beforeAdd(this: ProjectLayerInstance, map: L.Map): void {
@@ -141,6 +175,9 @@ export const ProjectLayer = L.GridLayer.extend({
     const tile = document.createElement('canvas')
     tile.width = tileSize.x
     tile.height = tileSize.y
+    const abortController = new AbortController()
+    this._tileAbortControllers.set(tile, abortController)
+    this._activeTileAbortControllers.add(abortController)
     const renderStart = getNow()
 
     queueMicrotask(async () => {
@@ -153,6 +190,10 @@ export const ProjectLayer = L.GridLayer.extend({
 
       try {
         const targetCRS = this._map?.options.crs
+
+        if (abortController.signal.aborted) {
+          return
+        }
 
         if (!targetCRS) {
           throw new ProjectLayerError(
@@ -206,7 +247,12 @@ export const ProjectLayer = L.GridLayer.extend({
           DEFAULT_RETRY_DELAY_MS,
           DEFAULT_SOURCE_TILE_TIMEOUT_MS,
           mosaicMetrics,
+          abortController.signal,
         )
+
+        if (abortController.signal.aborted) {
+          return
+        }
 
         const tileContext = tile.getContext('2d')
 
@@ -228,6 +274,10 @@ export const ProjectLayer = L.GridLayer.extend({
         done(undefined, tile)
       }
       catch (error) {
+        if (abortController.signal.aborted) {
+          return
+        }
+
         const normalizedError = normalizeProjectLayerError(error)
         emitTileErrorDebug(this, {
           coords: { x: coords.x, y: coords.y, z: coords.z },
@@ -237,9 +287,24 @@ export const ProjectLayer = L.GridLayer.extend({
         })
         done(normalizedError, tile)
       }
+      finally {
+        releaseTileRenderController(this, tile, abortController)
+      }
     })
 
     return tile
+  },
+
+  _abortTile(this: ProjectLayerInstance, tile: unknown): void {
+    abortTileRender(this, tile)
+  },
+
+  _removeTile(this: ProjectLayerInstance, key: string): void {
+    const tiles = (this as any)._tiles as Record<string, { el?: HTMLElement }> | undefined
+    const tile = tiles?.[key]?.el
+
+    abortTileRender(this, tile)
+    ;(L.GridLayer.prototype as any)._removeTile.call(this, key)
   },
 }) as unknown as {
   new (options: L.GridLayerOptions & { crs: L.CRS, layer: L.TileLayer, zoomRounding?: SourceZoomRounding }): L.GridLayer

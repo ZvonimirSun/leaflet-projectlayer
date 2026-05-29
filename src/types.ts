@@ -7,6 +7,7 @@ export type ProjectLayerPublicErrorCode
 
 export type ProjectLayerDebugCode
   = | 'SOURCE_TILE_TIMEOUT'
+    | 'TILE_RENDER_ABORTED'
     | 'INVALID_COORDINATE_VALUE'
     | 'PIPELINE_NOT_IMPLEMENTED'
     | 'MISSING_MAP_CRS'
@@ -71,6 +72,13 @@ export interface TileDependency {
 export interface MosaicBuildMetrics {
   cacheHits: number
   cacheMisses: number
+}
+
+export interface SourceTileCacheEntry {
+  controller: AbortController
+  consumers: number
+  promise: Promise<TileRenderElement>
+  settled: boolean
 }
 
 export interface TileRenderMetrics extends MosaicBuildMetrics {

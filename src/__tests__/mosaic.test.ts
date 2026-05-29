@@ -202,4 +202,147 @@ describe('拼接画布', () => {
 
     getContextSpy.mockRestore()
   })
+
+  it('取消拼接任务时会中止未完成的源瓦片请求', async () => {
+    const mockContext = {
+      drawImage: vi.fn(),
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: 'medium',
+    }
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
+    getContextSpy.mockReturnValue(mockContext as unknown as CanvasRenderingContext2D)
+
+    const controller = new AbortController()
+    let sourceSignal!: AbortSignal
+    const fetchSourceTile = vi.fn((_coords, signal?: AbortSignal) => {
+      sourceSignal = signal!
+
+      return new Promise<HTMLCanvasElement>((_, reject) => {
+        signal?.addEventListener('abort', () => {
+          reject(new Error('source aborted'))
+        }, { once: true })
+      })
+    })
+
+    const promise = buildMosaicCanvas(
+      [{
+        sourceTile: { x: 0, y: 0, z: 0 },
+        srcX: 0,
+        srcY: 0,
+        srcW: 256,
+        srcH: 256,
+        dstX: 0,
+        dstY: 0,
+        dstW: 256,
+        dstH: 256,
+      }],
+      fetchSourceTile,
+      { width: 256, height: 256 },
+      'medium',
+      8,
+      new Map(),
+      256,
+      0,
+      0,
+      5000,
+      undefined,
+      controller.signal,
+    )
+
+    await vi.waitFor(() => {
+      expect(fetchSourceTile).toHaveBeenCalledTimes(1)
+    })
+
+    controller.abort()
+
+    await expect(promise).rejects.toMatchObject({
+      debugCode: 'TILE_RENDER_ABORTED',
+    })
+    expect(sourceSignal.aborted).toBe(true)
+
+    getContextSpy.mockRestore()
+  })
+
+  it('共享源瓦片时单个目标瓦片取消不会提前中止源请求', async () => {
+    const mockContext = {
+      drawImage: vi.fn(),
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: 'medium',
+    }
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
+    getContextSpy.mockReturnValue(mockContext as unknown as CanvasRenderingContext2D)
+
+    const firstController = new AbortController()
+    const secondController = new AbortController()
+    const sourceTileCache = new Map()
+    let sourceSignal!: AbortSignal
+    const fetchSourceTile = vi.fn((_coords, signal?: AbortSignal) => {
+      sourceSignal = signal!
+
+      return new Promise<HTMLCanvasElement>((_, reject) => {
+        signal?.addEventListener('abort', () => {
+          reject(new Error('source aborted'))
+        }, { once: true })
+      })
+    })
+    const dependency = {
+      sourceTile: { x: 0, y: 0, z: 0 },
+      srcX: 0,
+      srcY: 0,
+      srcW: 256,
+      srcH: 256,
+      dstX: 0,
+      dstY: 0,
+      dstW: 256,
+      dstH: 256,
+    }
+
+    const firstPromise = buildMosaicCanvas(
+      [dependency],
+      fetchSourceTile,
+      { width: 256, height: 256 },
+      'medium',
+      8,
+      sourceTileCache,
+      256,
+      0,
+      0,
+      5000,
+      undefined,
+      firstController.signal,
+    )
+    const secondPromise = buildMosaicCanvas(
+      [dependency],
+      fetchSourceTile,
+      { width: 256, height: 256 },
+      'medium',
+      8,
+      sourceTileCache,
+      256,
+      0,
+      0,
+      5000,
+      undefined,
+      secondController.signal,
+    )
+
+    await vi.waitFor(() => {
+      expect(fetchSourceTile).toHaveBeenCalledTimes(1)
+    })
+    await Promise.resolve()
+
+    firstController.abort()
+    await expect(firstPromise).rejects.toMatchObject({
+      debugCode: 'TILE_RENDER_ABORTED',
+    })
+    expect(sourceSignal.aborted).toBe(false)
+
+    secondController.abort()
+    await expect(secondPromise).rejects.toMatchObject({
+      debugCode: 'TILE_RENDER_ABORTED',
+    })
+    expect(sourceSignal.aborted).toBe(true)
+
+    getContextSpy.mockRestore()
+  })
 })

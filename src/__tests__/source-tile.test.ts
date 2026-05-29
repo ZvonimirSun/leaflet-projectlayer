@@ -90,4 +90,33 @@ describe('源瓦片调用', () => {
 
     expect(capturedUrls).toEqual(['https://tiles.example/1/2/0.png'])
   })
+
+  it('取消请求时会触发源瓦片卸载事件', async () => {
+    const controller = new AbortController()
+    const layer = new L.TileLayer('')
+    let image!: HTMLImageElement
+    const tileUnloadSpy = vi.fn()
+
+    layer.on('tileunload', tileUnloadSpy)
+
+    ;(layer as any).createTile = vi.fn(() => {
+      image = document.createElement('img')
+      image.src = 'https://tiles.example/1/0/0.png'
+      return image
+    })
+
+    const fetchSourceTile = createSourceTileFetcher(layer, L.CRS.EPSG3857)
+    const promise = fetchSourceTile({ x: 0, y: 0, z: 1 }, controller.signal)
+
+    controller.abort()
+
+    await expect(promise).rejects.toMatchObject({
+      debugCode: 'TILE_RENDER_ABORTED',
+    })
+    expect(tileUnloadSpy).toHaveBeenCalledTimes(1)
+    expect(tileUnloadSpy.mock.calls[0]?.[0]).toMatchObject({
+      coords: { x: 0, y: 0, z: 1 },
+      tile: image,
+    })
+  })
 })

@@ -57,18 +57,36 @@ function computeWrapRange(
   ]
 }
 
+function createAbortError(coords: TileCoord): ProjectLayerError {
+  return new ProjectLayerError(
+    'TILE_RENDER_ABORTED',
+    `Tile rendering was aborted for tile ${coords.z}/${coords.x}/${coords.y}.`,
+  )
+}
+
+function fireSourceTileUnload(layer: L.TileLayer, tile: HTMLElement, coords: L.Coords): void {
+  layer.fire('tileunload', {
+    coords,
+    tile,
+  })
+}
+
 // Leaflet 的 createTile 是受保护类型，但运行时插件间经常需要复用该方法。
-export function createSourceTileFetcher(layer: L.TileLayer, crs: L.CRS): (coords: TileCoord) => Promise<TileRenderElement> {
-  return async (coords: TileCoord): Promise<TileRenderElement> => {
+export function createSourceTileFetcher(layer: L.TileLayer, crs: L.CRS): (coords: TileCoord, signal?: AbortSignal) => Promise<TileRenderElement> {
+  return async (coords: TileCoord, signal?: AbortSignal): Promise<TileRenderElement> => {
     return new Promise<TileRenderElement>((resolve, reject) => {
       let settled = false
       let returnedTile: HTMLElement | null = null
+      let wrappedCoords: L.Coords | null = null
       let waitingReturnedTileForDone = false
       let imageCleanup: (() => void) | null = null
+      let abortCleanup: (() => void) | null = null
 
       const cleanup = () => {
         imageCleanup?.()
         imageCleanup = null
+        abortCleanup?.()
+        abortCleanup = null
       }
 
       const settleResolve = (value: TileRenderElement) => {
@@ -89,6 +107,27 @@ export function createSourceTileFetcher(layer: L.TileLayer, crs: L.CRS): (coords
         settled = true
         cleanup()
         reject(normalizeProjectLayerError(error))
+      }
+
+      if (signal?.aborted) {
+        settleReject(createAbortError(coords))
+        return
+      }
+
+      const onAbort = () => {
+        const tile = returnedTile
+        const eventCoords = wrappedCoords
+
+        if (tile && eventCoords) {
+          fireSourceTileUnload(layer, tile, eventCoords)
+        }
+
+        settleReject(createAbortError(coords))
+      }
+
+      signal?.addEventListener('abort', onAbort, { once: true })
+      abortCleanup = () => {
+        signal?.removeEventListener('abort', onAbort)
       }
 
       const maybeResolveTile = (tile: unknown): boolean => {
@@ -131,7 +170,7 @@ export function createSourceTileFetcher(layer: L.TileLayer, crs: L.CRS): (coords
         }
 
         const leafletCoords = toLeafletCoords(coords)
-        const wrappedCoords = typeof sourceLayerWithRequestState._wrapCoords === 'function'
+        wrappedCoords = typeof sourceLayerWithRequestState._wrapCoords === 'function'
           ? sourceLayerWithRequestState._wrapCoords(leafletCoords)
           : leafletCoords
 
