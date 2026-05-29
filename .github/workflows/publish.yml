@@ -36,6 +36,24 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Publish
+      - name: Check published version
+        id: version-check
         if: github.event_name == 'push' && github.ref_name == env.MAIN_BRANCH
+        run: |
+          package_name=$(node -p "require('./package.json').name")
+          package_version=$(node -p "require('./package.json').version")
+
+          if published_version=$(npm view "$package_name@$package_version" version 2>npm-view-error.log); then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "$package_name@$published_version already exists. Skipping publish."
+          elif grep -q "E404" npm-view-error.log; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "$package_name@$package_version is not published yet. Publishing will continue."
+          else
+            cat npm-view-error.log
+            exit 1
+          fi
+
+      - name: Publish
+        if: github.event_name == 'push' && github.ref_name == env.MAIN_BRANCH && steps.version-check.outputs.exists != 'true'
         run: pnpm publish --access public
